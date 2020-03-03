@@ -26,9 +26,8 @@ class RcslibConan(ConanFile):
             del self.options.fPIC
 
     def source(self):
-
-        tools.get("https://github.com/usnistgov/rcslib/archive/rcslib-{0}.zip".format(self.version))
-        extracted_dir = self.name + "-" + self.name + "-" + self.version
+        self.run('git clone https://github.com/usnistgov/rcslib.git')
+        extracted_dir = self.name
         os.rename(extracted_dir, self._source_subfolder)
 
             

@@ -4,7 +4,7 @@ import os
 
 class RcslibConan(ConanFile):
     name = "rcslib"
-    description = "Keep it short"
+    description = "NIST Real-Time Control Systems Library including Posemath, NML communications & Java Plotter"
     topics = ("conan", "rcslib")
     url = "https://github.com/Renari/conan-rcslib"
     homepage = "https://github.com/usnistgov/rcslib"
@@ -16,9 +16,6 @@ class RcslibConan(ConanFile):
     options = {"shared": [True, False], "fPIC": [True, False]}
     default_options = {"shared": False, "fPIC": True}
 
-    _source_subfolder = "source_subfolder"
-    _build_subfolder = "build_subfolder"
-
     requires = ()
 
     def config_options(self):
@@ -26,37 +23,32 @@ class RcslibConan(ConanFile):
             del self.options.fPIC
 
     def source(self):
-        self.run('git clone https://github.com/usnistgov/rcslib.git')
-        extracted_dir = self.name
-        os.rename(extracted_dir, self._source_subfolder)
+        tools.Git().clone("https://github.com/usnistgov/rcslib.git", "master")
+        tools.Git().checkout(self.version)
 
-            
     def build(self):
-        with tools.chdir(self._source_subfolder):
-            autotools = AutoToolsBuildEnvironment(self)
+        self.run("chmod a+x configure")
 
-            self.run("chmod a+x configure")
+        os.makedirs('pkgconfig')
+        pkg_config_path = os.path.abspath('pkgconfig')
+        pkg_config_path = tools.unix_path(pkg_config_path) if os.name == 'nt' else pkg_config_path
 
-            os.makedirs('pkgconfig')
-            pkg_config_path = os.path.abspath('pkgconfig')
-            pkg_config_path = tools.unix_path(pkg_config_path) if os.name == 'nt' else pkg_config_path
-
-            autotools.configure(pkg_config_paths=[pkg_config_path])
-            autotools.make()
-            autotools.install()
+        autotools = AutoToolsBuildEnvironment(self)
+        autotools.configure(pkg_config_paths=[pkg_config_path])
+        autotools.make(["-j1"])  # a race condition will occur when building on more than one core
+        autotools.install()
 
     def package(self):
-        self.copy(pattern="license-NIST.txt", dst="licenses", src=self._source_subfolder)
-
-        include_folder = os.path.join(self._source_subfolder, "include")
-        self.copy(pattern="*", dst="include", src=include_folder)
-        self.copy(pattern="*.dll", dst="bin", keep_path=False)
-        self.copy(pattern="*.lib", dst="lib", keep_path=False)
-        self.copy(pattern="*.a", dst="lib", keep_path=False)
-        self.copy(pattern="*.so*", dst="lib", keep_path=False)
-        self.copy(pattern="*.dylib", dst="lib", keep_path=False)
+        self.copy(pattern="COPYING", dst="licenses", src=self.build_folder)
+        with tools.chdir(self.package_folder):
+            tools.remove_files_by_mask("lib", "*.la")
+            tools.remove_files_by_mask("lib", "*.lib")
+            tools.rmdir(os.path.join("lib", "pkgconfig"))
+            if self.options.shared:
+                tools.remove_files_by_mask("lib", "*.a")
+            else:
+                tools.remove_files_by_mask("lib", "*.so")
 
     def package_info(self):
-        libs = tools.collect_libs(self)
-        # remove invalid Makefile.lib files
-        self.cpp_info.libs = [ x for x in libs if "Makefile" not in x ]
+        self.cpp_info.libs = ["posemath", "rcs"]
+        self.cpp_info.names["cmake_find_package"] = "rcs"
